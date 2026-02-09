@@ -11,8 +11,10 @@ from domain.sales.schemas import (
 	OpportunityFilters,
 	OpportunityUpdateRequest,
 )
+from domain.crm.models import Client
 from shared.exceptions import not_found, validation_error
 from shared.pagination import PaginatedResponse
+from shared.validators import validate_fk_same_tenant
 
 
 VALID_OPPORTUNITY_STAGE_TRANSITIONS = {
@@ -41,6 +43,11 @@ class SalesService:
 	async def create_opportunity(
 		self, session: AsyncSession, tenant_id: UUID, data: OpportunityCreateRequest
 	) -> Opportunity:
+		# Validate client belongs to same tenant
+		await validate_fk_same_tenant(
+			session, Client, data.client_id, tenant_id, "client_id"
+		)
+		
 		opportunity = Opportunity(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_opportunity(session, opportunity)
 
@@ -60,6 +67,13 @@ class SalesService:
 		data: OpportunityUpdateRequest,
 	) -> Opportunity:
 		opportunity = await self.get_opportunity(session, tenant_id, opportunity_id)
+		
+		# Validate client_id if being updated
+		if data.client_id is not None:
+			await validate_fk_same_tenant(
+				session, Client, data.client_id, tenant_id, "client_id"
+			)
+		
 		for key, value in data.model_dump(exclude_unset=True).items():
 			if key == "stage" and value is not None and value != opportunity.stage:
 				self._validate_stage_transition(opportunity.stage, value)

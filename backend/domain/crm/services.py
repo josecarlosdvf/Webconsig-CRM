@@ -188,12 +188,14 @@ class CrmService:
 		self._validate_lead_status_transition(lead.status, LeadStatus.converted)
 		
 		# Create client from lead data
+		# Note: Client requires document field but Lead doesn't have it.
+		# Business rule: document must be collected separately before conversion
 		client = Client(
 			tenant_id=tenant_id,
 			name=lead.name,
 			email=lead.email,
 			phone=lead.phone,
-			document="",  # Document must be provided separately
+			document="",  # Will be updated after client creation with proper document
 		)
 		await repository.create_client(session, client)
 		

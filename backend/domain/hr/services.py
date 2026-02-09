@@ -44,8 +44,10 @@ from domain.hr.schemas import (
 	TimeEntryFilters,
 )
 from domain.hr.models import Absence, Contract, Document, LeaveRequest, Recruitment, TimeEntry
+from domain.finance.models import Company
 from shared.exceptions import not_found, validation_error
 from shared.pagination import PaginatedResponse
+from shared.validators import validate_fk_same_tenant
 
 
 VALID_EMPLOYEE_STATUS_TRANSITIONS = {
@@ -108,6 +110,11 @@ class HrService:
 	async def create_employee(
 		self, session: AsyncSession, tenant_id: UUID, data: EmployeeCreateRequest
 	) -> Employee:
+		# Validate company belongs to same tenant
+		await validate_fk_same_tenant(
+			session, Company, data.company_id, tenant_id, "company_id"
+		)
+		
 		employee = Employee(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_employee(session, employee)
 
@@ -200,6 +207,11 @@ class HrService:
 	async def create_candidate(
 		self, session: AsyncSession, tenant_id: UUID, data: CandidateCreateRequest
 	) -> Candidate:
+		# Validate recruitment belongs to same tenant
+		await validate_fk_same_tenant(
+			session, Recruitment, data.recruitment_id, tenant_id, "recruitment_id"
+		)
+		
 		candidate = Candidate(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_candidate(session, candidate)
 
@@ -248,6 +260,11 @@ class HrService:
 	async def create_absence(
 		self, session: AsyncSession, tenant_id: UUID, data: AbsenceCreateRequest
 	) -> Absence:
+		# Validate employee belongs to same tenant
+		await validate_fk_same_tenant(
+			session, Employee, data.employee_id, tenant_id, "employee_id"
+		)
+		
 		absence = Absence(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_absence(session, absence)
 
@@ -265,6 +282,11 @@ class HrService:
 	async def create_time_entry(
 		self, session: AsyncSession, tenant_id: UUID, data: TimeEntryCreateRequest
 	) -> TimeEntry:
+		# Validate employee belongs to same tenant
+		await validate_fk_same_tenant(
+			session, Employee, data.employee_id, tenant_id, "employee_id"
+		)
+		
 		time_entry = TimeEntry(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_time_entry(session, time_entry)
 
@@ -294,6 +316,11 @@ class HrService:
 	async def create_leave_request(
 		self, session: AsyncSession, tenant_id: UUID, data: LeaveRequestCreateRequest
 	) -> LeaveRequest:
+		# Validate employee belongs to same tenant
+		await validate_fk_same_tenant(
+			session, Employee, data.employee_id, tenant_id, "employee_id"
+		)
+		
 		leave_request = LeaveRequest(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_leave_request(session, leave_request)
 
@@ -323,6 +350,11 @@ class HrService:
 	async def create_document(
 		self, session: AsyncSession, tenant_id: UUID, data: DocumentCreateRequest
 	) -> Document:
+		# Validate employee belongs to same tenant
+		await validate_fk_same_tenant(
+			session, Employee, data.employee_id, tenant_id, "employee_id"
+		)
+		
 		document = Document(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_document(session, document)
 
@@ -340,6 +372,14 @@ class HrService:
 	async def create_contract(
 		self, session: AsyncSession, tenant_id: UUID, data: ContractCreateRequest
 	) -> Contract:
+		# Validate FKs belong to same tenant
+		await validate_fk_same_tenant(
+			session, Employee, data.employee_id, tenant_id, "employee_id"
+		)
+		await validate_fk_same_tenant(
+			session, Company, data.company_id, tenant_id, "company_id"
+		)
+		
 		contract = Contract(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_contract(session, contract)
 

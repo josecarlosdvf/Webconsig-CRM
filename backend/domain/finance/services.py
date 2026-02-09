@@ -32,6 +32,7 @@ from domain.finance.schemas import (
 from domain.finance.models import Account, Company, Payable, Payment, Receivable
 from shared.exceptions import not_found, validation_error
 from shared.pagination import PaginatedResponse
+from shared.validators import validate_fk_same_tenant
 
 
 VALID_COMPANY_STATUS_TRANSITIONS = {
@@ -183,6 +184,14 @@ class FinanceService:
 	async def create_payment(
 		self, session: AsyncSession, tenant_id: UUID, data: PaymentCreateRequest
 	) -> Payment:
+		# Validate FKs belong to same tenant
+		await validate_fk_same_tenant(
+			session, Account, data.account_id, tenant_id, "account_id"
+		)
+		await validate_fk_same_tenant(
+			session, Company, data.company_id, tenant_id, "company_id"
+		)
+		
 		payment = Payment(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_payment(session, payment)
 
@@ -217,6 +226,14 @@ class FinanceService:
 	async def create_payable(
 		self, session: AsyncSession, tenant_id: UUID, data: PayableCreateRequest
 	) -> Payable:
+		# Validate FKs belong to same tenant
+		await validate_fk_same_tenant(
+			session, Company, data.company_id, tenant_id, "company_id"
+		)
+		await validate_fk_same_tenant(
+			session, Account, data.account_id, tenant_id, "account_id"
+		)
+		
 		payable = Payable(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_payable(session, payable)
 
@@ -268,6 +285,14 @@ class FinanceService:
 	async def create_receivable(
 		self, session: AsyncSession, tenant_id: UUID, data: ReceivableCreateRequest
 	) -> Receivable:
+		# Validate FKs belong to same tenant
+		await validate_fk_same_tenant(
+			session, Company, data.company_id, tenant_id, "company_id"
+		)
+		await validate_fk_same_tenant(
+			session, Account, data.account_id, tenant_id, "account_id"
+		)
+		
 		receivable = Receivable(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_receivable(session, receivable)
 

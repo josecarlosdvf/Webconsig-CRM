@@ -17,7 +17,7 @@ from domain.auth.schemas import (
 	RoleUpdateRequest,
 )
 from shared.auth import hash_password, issue_token, verify_password, validate_password
-from shared.exceptions import conflict, not_found, validation_error
+from shared.exceptions import conflict, not_found, validation_error, unauthorized
 from shared.pagination import PaginatedResponse
 
 
@@ -33,7 +33,7 @@ class AuthService:
 	) -> tuple[str, int, UUID, str]:
 		user = await repository.get_user_by_username(session, tenant_id, data.username)
 		if not user or not verify_password(data.password, user.password_hash):
-			raise conflict("Invalid credentials")
+			raise unauthorized("Invalid credentials")
 		
 		# Get user scopes from roles
 		scopes = await repository.get_user_scopes(session, tenant_id, user.role_ids)
