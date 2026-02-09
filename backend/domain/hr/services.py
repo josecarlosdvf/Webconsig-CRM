@@ -151,7 +151,7 @@ class HrService:
 		session: AsyncSession,
 		tenant_id: UUID,
 		employee_id: UUID,
-		data: EmployeeTerminateRequest,,
+		data: EmployeeTerminateRequest,
 		actor_id: UUID | None = None,
 	) -> Employee:
 		employee = await self.get_employee(session, tenant_id, employee_id)
@@ -168,7 +168,7 @@ class HrService:
 		filters: RecruitmentFilters,
 		page: int,
 		page_size: int,
-		sort: str | None = None,,
+		sort: str | None = None,
 		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Recruitment]:
 		return await repository.list_recruitments(session, tenant_id, filters, page, page_size, sort)
@@ -199,7 +199,7 @@ class HrService:
 		session: AsyncSession,
 		tenant_id: UUID,
 		recruitment_id: UUID,
-		data: RecruitmentUpdateRequest,,
+		data: RecruitmentUpdateRequest,
 		actor_id: UUID | None = None,
 	) -> Recruitment:
 		recruitment = await self.get_recruitment(session, tenant_id, recruitment_id)
@@ -216,7 +216,7 @@ class HrService:
 		filters: CandidateFilters,
 		page: int,
 		page_size: int,
-		sort: str | None = None,,
+		sort: str | None = None,
 		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Candidate]:
 		return await repository.list_candidates(session, tenant_id, filters, page, page_size, sort)
@@ -252,7 +252,7 @@ class HrService:
 		session: AsyncSession,
 		tenant_id: UUID,
 		candidate_id: UUID,
-		data: CandidateUpdateRequest,,
+		data: CandidateUpdateRequest,
 		actor_id: UUID | None = None,
 	) -> Candidate:
 		candidate = await self.get_candidate(session, tenant_id, candidate_id)
@@ -284,7 +284,7 @@ class HrService:
 		filters: AbsenceFilters,
 		page: int,
 		page_size: int,
-		sort: str | None = None,,
+		sort: str | None = None,
 		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Absence]:
 		return await repository.list_absences(session, tenant_id, filters, page, page_size, sort)
@@ -313,7 +313,7 @@ class HrService:
 		filters: TimeEntryFilters,
 		page: int,
 		page_size: int,
-		sort: str | None = None,,
+		sort: str | None = None,
 		actor_id: UUID | None = None,
 	) -> PaginatedResponse[TimeEntry]:
 		return await repository.list_time_entries(session, tenant_id, filters, page, page_size, sort)
@@ -358,7 +358,7 @@ class HrService:
 		filters: LeaveRequestFilters,
 		page: int,
 		page_size: int,
-		sort: str | None = None,,
+		sort: str | None = None,
 		actor_id: UUID | None = None,
 	) -> PaginatedResponse[LeaveRequest]:
 		return await repository.list_leave_requests(
@@ -407,7 +407,7 @@ class HrService:
 		filters: DocumentFilters,
 		page: int,
 		page_size: int,
-		sort: str | None = None,,
+		sort: str | None = None,
 		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Document]:
 		return await repository.list_documents(session, tenant_id, filters, page, page_size, sort)
@@ -436,7 +436,7 @@ class HrService:
 		filters: ContractFilters,
 		page: int,
 		page_size: int,
-		sort: str | None = None,,
+		sort: str | None = None,
 		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Contract]:
 		return await repository.list_contracts(session, tenant_id, filters, page, page_size, sort)
@@ -468,7 +468,7 @@ class HrService:
 		filters: BenefitFilters,
 		page: int,
 		page_size: int,
-		sort: str | None = None,,
+		sort: str | None = None,
 		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Benefit]:
 		return await repository.list_benefits(session, tenant_id, filters, page, page_size, sort)
@@ -490,7 +490,7 @@ class HrService:
 		session: AsyncSession,
 		tenant_id: UUID,
 		benefit_id: UUID,
-		data: BenefitAssignRequest,,
+		data: BenefitAssignRequest,
 		actor_id: UUID | None = None,
 	) -> Benefit:
 		benefit = await repository.get_benefit(session, tenant_id, benefit_id)
