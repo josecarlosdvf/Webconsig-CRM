@@ -7,8 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from domain.billing import repository
 from domain.billing.models import Invoice, InvoiceStatus
 from domain.billing.schemas import InvoiceCreateRequest, InvoiceFilters, InvoiceUpdateRequest
+from domain.crm.models import Client
+from domain.finance.models import Company
 from shared.exceptions import not_found, validation_error
 from shared.pagination import PaginatedResponse
+from shared.validators import validate_fk_same_tenant
 
 
 VALID_INVOICE_STATUS_TRANSITIONS = {
@@ -35,6 +38,14 @@ class BillingService:
 	async def create_invoice(
 		self, session: AsyncSession, tenant_id: UUID, data: InvoiceCreateRequest
 	) -> Invoice:
+		# Validate FKs belong to same tenant
+		await validate_fk_same_tenant(
+			session, Client, data.client_id, tenant_id, "client_id"
+		)
+		await validate_fk_same_tenant(
+			session, Company, data.company_id, tenant_id, "company_id"
+		)
+		
 		invoice = Invoice(tenant_id=tenant_id, **data.model_dump())
 		return await repository.create_invoice(session, invoice)
 
