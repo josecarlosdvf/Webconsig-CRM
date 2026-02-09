@@ -16,6 +16,7 @@ from domain.auth.schemas import (
 	RoleCreateRequest,
 	RoleUpdateRequest,
 )
+from domain.auth import events
 from shared.auth import hash_password, issue_token, verify_password, validate_password
 from shared.exceptions import conflict, not_found, validation_error, unauthorized
 from shared.pagination import PaginatedResponse
@@ -54,7 +55,7 @@ class AuthService:
 		return await repository.list_users(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_user(
-		self, session: AsyncSession, tenant_id: UUID, data: UserCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: UserCreateRequest, actor_id: UUID | None = None
 	) -> User:
 		# Validate password against policy
 		try:
@@ -133,6 +134,9 @@ class AuthService:
 			scopes=data.scopes
 		)
 		return await repository.create_role(session, role)
+		
+		# Emit event
+		await events.emit_role_created(tenant_id, result.id, actor_id)
 
 	async def get_role(
 		self, session: AsyncSession, tenant_id: UUID, role_id: UUID
