@@ -117,18 +117,18 @@
 
 | # | Item | Status | Notas |
 |---|------|--------|-------|
-| 2.1 | Event bus — shared/events.py (publish/subscribe) | ✅ | EventBus com pub/sub, wildcard handlers, idempotency, WebSocket registry, webhook placeholder |
-| 2.2 | WebSocket server — wss://{host}/ws/v1/{tenant_id} | ⚠️ | Registry pronto, falta FastAPI WebSocket endpoint |
-| 2.3 | Webhook dispatcher — POST com retry+backoff | ⚠️ | Placeholder com registry, falta implementação de retry |
+| 2.1 | Event bus — shared/events.py (publish/subscribe) | ✅ | EventBus com pub/sub, wildcard handlers, idempotency, WebSocket registry, webhook dispatcher |
+| 2.2 | WebSocket server — wss://{host}/ws/v1/{tenant_id} | ✅ | FastAPI WebSocket endpoint implementado em api/websocket.py, registrado em main.py |
+| 2.3 | Webhook dispatcher — POST com retry+backoff | ✅ | Implementado com httpx, 3 retries, exponential backoff (1s->2s->4s, max 60s) |
 | 2.4 | Events CRM — lead.created, client.converted | ✅ | 5 eventos: lead.created, lead.status_changed, client.created, client.converted, client.status_changed |
 | 2.5 | Events Sales — opportunity.stage_changed | ✅ | 4 eventos: opportunity.created, opportunity.stage_changed, opportunity.won, opportunity.lost |
-| 2.6 | Events Finance — payment.confirmed, receivable.confirmed, reconciliation.completed | ❌ | events.py placeholder |
-| 2.7 | Events Billing — invoice.issued, invoice.paid | ❌ | events.py placeholder |
-| 2.8 | Events Inventory — stock.adjusted | ❌ | events.py placeholder |
-| 2.9 | Events Auth — user.created, user.password_changed | ❌ | events.py placeholder |
-| 2.10 | Events HR — 8 eventos (recruitment, candidate, employee, absence, etc.) | ❌ | events.py placeholder |
-| 2.11 | Events Import — job.started, job.progress, job.completed, job.failed | ❌ | |
-| 2.12 | Events Extensions — activated, deactivated, config_updated, error | ❌ | |
+| 2.6 | Events Finance — payment.confirmed, receivable.confirmed, reconciliation.completed | ✅ | 11 eventos: payment (created/confirmed/failed), receivable (created/confirmed/received), payable (created/approved/paid), reconciliation, company, account |
+| 2.7 | Events Billing — invoice.issued, invoice.paid | ✅ | 5 eventos: invoice.created, invoice.issued, invoice.paid, invoice.overdue, invoice.canceled |
+| 2.8 | Events Inventory — stock.adjusted | ✅ | 4 eventos: item.created, item.status_changed, stock.adjusted, stock.low |
+| 2.9 | Events Auth — user.created, user.password_changed | ✅ | 9 eventos: user (created/status_changed/password_changed/login/logout/login_failed), role (created/assigned/revoked) |
+| 2.10 | Events HR — 8 eventos (recruitment, candidate, employee, absence, etc.) | ✅ | 17 eventos: recruitment (2), candidate (5), employee (3), absence (1), time_entry (2), leave (3), document (1), contract (2), benefit (2) |
+| 2.11 | Events Import — job.started, job.progress, job.completed, job.failed | ❌ | Pendente integração nos services |
+| 2.12 | Events Extensions — activated, deactivated, config_updated, error | ❌ | Pendente integração nos services |
 | 2.13 | Payload padrão de evento — idempotency_key, version, trace_id | ✅ | Event model com todos os campos spec (id, type, version, occurred_at, tenant_id, idempotency_key, actor, source, trace_id, data, metadata) |
 
 ---
@@ -145,17 +145,17 @@
 | 3.6 | Engine de parsing — XLSX reader | ✅ | XLSXParser com openpyxl em shared/import_engine.py |
 | 3.7 | Engine de parsing — JSON reader | ✅ | JSONParser com estruturas flexíveis (array, object with data/items/rows) |
 | 3.8 | Preview com mapeamento sugerido por similaridade de nomes | ✅ | suggest_column_mapping com SequenceMatcher (threshold 0.6) |
-| 3.9 | Validação contra schema da entidade alvo | ❌ | Precisa integração com Pydantic schemas por domínio |
-| 3.10 | Detecção de duplicatas por campos únicos | ❌ | Precisa mapeamento de unique fields por entidade |
-| 3.11 | Processamento em batch (100 linhas/batch, transaction per batch) | ❌ | |
-| 3.12 | Modo dry-run (validação sem persistir) | ❌ | |
-| 3.13 | Opção update_existing (atualizar registros duplicados) | ❌ | |
-| 3.14 | Download de template por domínio/entidade | ❌ | Endpoint retorna CSV vazio |
-| 3.15 | Download de relatório de erros | ❌ | |
-| 3.16 | Processamento assíncrono (background task) | ❌ | |
-| 3.17 | Integração com auditoria (1 log por job) | ❌ | |
-| 3.18 | Notificação ao concluir (WebSocket + email opcional) | ❌ | |
-| 3.19 | Limite de tamanho de arquivo configurável por tenant | ❌ | |
+| 3.9 | Validação contra schema da entidade alvo | ✅ | ImportProcessor valida com Pydantic schemas via registry (shared/import_processor.py, shared/import_registry.py) |
+| 3.10 | Detecção de duplicatas por campos únicos | ✅ | UNIQUE_FIELDS mapping por entidade em import_processor.py |
+| 3.11 | Processamento em batch (100 linhas/batch, transaction per batch) | ✅ | ImportProcessor._process_batch com nested transactions |
+| 3.12 | Modo dry-run (validação sem persistir) | ✅ | Opção dry_run em ImportJob.options |
+| 3.13 | Opção update_existing (atualizar registros duplicados) | ⚠️ | Flag existe, lógica de update pendente |
+| 3.14 | Download de template por domínio/entidade | ✅ | GET /import/templates/{domain}/{entity} retorna CSV com headers do schema |
+| 3.15 | Download de relatório de erros | ✅ | GET /import/jobs/{job_id}/errors retorna lista de ImportErrorResponse |
+| 3.16 | Processamento assíncrono (background task) | ⚠️ | Estrutura pronta, comentado para usar BackgroundTasks ou Celery |
+| 3.17 | Integração com auditoria (1 log por job) | ✅ | POST /import/jobs registra audit log com AuditAction.import_ |
+| 3.18 | Notificação ao concluir (WebSocket + email opcional) | ❌ | Precisa integração com event bus |
+| 3.19 | Limite de tamanho de arquivo configurável por tenant | ❌ | Precisa config por tenant |
 
 ---
 
@@ -198,11 +198,11 @@
 
 | # | Item | Status | Notas |
 |---|------|--------|-------|
-| 6.1 | Abstração de storage (S3/Cloudflare/local) | ✅ | StorageProvider ABC, LocalStorageProvider completo, S3StorageProvider placeholder (boto3 pending) |
-| 6.2 | Upload de arquivos (documentos HR, comprovantes finance, importação) | ⚠️ | Abstração pronta, falta integração em endpoints |
+| 6.1 | Abstração de storage (S3/Cloudflare/local) | ✅ | StorageProvider ABC, LocalStorageProvider completo, S3StorageProvider implementado com aioboto3 |
+| 6.2 | Upload de arquivos (documentos HR, comprovantes finance, importação) | ⚠️ | Implementado para importação (POST /import/jobs), falta HR/finance endpoints |
 | 6.3 | Config de storage por tenant (bucket, region, limits) | ⚠️ | StorageConfig model pronto, falta persistência por tenant |
-| 6.4 | Validação de tipo/tamanho de arquivo | ❌ | |
-| 6.5 | URL assinada para download seguro | ⚠️ | LocalStorageProvider tem fallback simples, S3 pendente |
+| 6.4 | Validação de tipo/tamanho de arquivo | ❌ | Pendente implementação |
+| 6.5 | URL assinada para download seguro | ✅ | LocalStorageProvider e S3StorageProvider.generate_signed_url implementados |
 
 ---
 
@@ -305,14 +305,14 @@
 
 | Fase | Progresso | Prioridade |
 |------|-----------|------------|
-| 0 — Infra & Scaffold | ✅ ~95% (events, storage, import engine completos) | 🔴 Alta |
+| 0 — Infra & Scaffold | ✅ ~98% (events, storage, import engine completos) | 🔴 Alta |
 | 1 — Backend Core (7 domínios) | ✅ ~98% (FK validation implementada, login corrigido) | 🔴 Alta |
-| 1.5 — API Routers | ✅ ~95% (rotas ok, faltam ajustes em import/audit) | 🔴 Alta |
-| 2 — Eventos tempo real | ⚠️ ~50% (event bus + CRM/Sales events ok, falta WebSocket endpoint e outros domínios) | 🟡 Média |
-| 3 — Importação inteligente | ⚠️ ~60% (models + parsers + mapping ok, falta validation + batch + async) | 🟡 Média |
+| 1.5 — API Routers | ✅ ~98% (rotas ok, import endpoints aprimorados) | 🔴 Alta |
+| 2 — Eventos tempo real | ✅ ~90% (WebSocket endpoint + webhook retry + todos eventos de domínio implementados) | 🟡 Média |
+| 3 — Importação inteligente | ✅ ~85% (batch processing + validation + duplicate detection + templates implementados) | 🟡 Média |
 | 4 — Extensões | ⚠️ ~65% (core ok, loader e migrations faltam) | 🟡 Média |
 | 5 — Multitenancy & Segurança | ⚠️ ~45% (scopes + CORS + password policy ok, falta whitelabel + rate limiting) | 🔴 Alta |
-| 6 — Storage & Documentos | ⚠️ ~60% (abstração + LocalStorage ok, falta S3 + endpoints) | 🟡 Média |
+| 6 — Storage & Documentos | ✅ ~80% (abstração + LocalStorage + S3StorageProvider implementados, falta endpoints HR/finance) | 🟡 Média |
 | 7 — Workflows configuráveis | ❌ 0% | 🟡 Média |
 | 8 — Alembic & BD | ✅ 100% | 🔴 Alta |
 | 9 — Testes | ⚠️ ~25% (happy paths ok, sem negativos/edge cases) | 🔴 Alta |
@@ -324,29 +324,44 @@
 ## 🎯 Atualizações desta sessão (2026-02-09)
 
 ### ✅ Implementado
-- **FK cross-tenant validation**: `shared/validators.py` aplicado em Sales, Finance, Billing, HR
-- **Event bus completo**: pub/sub, idempotency, WebSocket registry, webhook dispatch
-- **CRM events**: 5 eventos integrados (lead.created, client.converted, etc.)
-- **Sales events**: 4 eventos integrados (opportunity.created, stage_changed, won, lost)
-- **Storage abstraction**: LocalStorageProvider completo, S3StorageProvider placeholder
-- **Import parsing engine**: CSVParser, XLSXParser, JSONParser com charset detection
-- **Column mapping**: suggest_column_mapping com similaridade de strings
-- **Bug fixes**: login retorna 401, convert_lead documentado, soft-delete HR clarificado
+- **WebSocket endpoint**: `/api/v1/ws/{tenant_id}` implementado em `api/websocket.py` com registry integrado ao event bus
+- **Webhook retry logic**: Exponential backoff com 3 retries (1s->2s->4s, max 60s) usando httpx async
+- **Todos os eventos de domínio**:
+  - Finance: 11 eventos (payment, receivable, payable, reconciliation, company, account)
+  - Billing: 5 eventos (invoice created/issued/paid/overdue/canceled)
+  - Inventory: 4 eventos (item created/status_changed, stock adjusted/low)
+  - Auth: 9 eventos (user, role, login/logout)
+  - HR: 17 eventos (recruitment, candidate, employee, absence, time entry, leave, document, contract, benefit)
+- **S3StorageProvider**: Implementado com aioboto3 para AWS S3, Cloudflare R2, MinIO
+- **Import batch processing**: 100 rows/batch com nested transactions em `shared/import_processor.py`
+- **Import validation**: Schema validation via Pydantic, duplicate detection por unique fields
+- **Import schema registry**: Todos os domínios registrados em `shared/import_registry.py`
+- **Enhanced import API**:
+  - Template generation com headers reais dos schemas
+  - File upload para storage antes de criar job
+  - Preview com parsing de arquivo, mapeamento sugerido e sample rows
+  - Execute com batch processor (modo dry-run por enquanto)
+- **Dependencies**: boto3==1.35.80, aioboto3==13.3.0 adicionados ao requirements.txt
 
-### 🚧 Em progresso (pronto para continuar)
-- WebSocket FastAPI endpoint (registry já existe)
-- Webhook dispatcher com retry (placeholder pronto)
-- Events para demais domínios (Finance, Billing, Inventory, Auth, HR)
-- Import batch processing + validation + async
-- S3StorageProvider com boto3
+### 🚧 Pendente (próximos passos)
+- Integrar event emission nos service layers (Finance, Billing, Inventory, Auth, HR)
+- Repository mapping para import execution (domain.entity -> repository instance)
+- Background task processing para imports assíncronos (FastAPI BackgroundTasks ou Celery)
+- WebSocket notifications para progresso de import
+- File upload endpoints para HR (documents) e Finance (comprovantes)
+- Testes de integração para WebSocket, webhook retry, S3 storage, import batch processing
 
 ### 📋 Próximos passos sugeridos
-1. Implementar WebSocket endpoint em FastAPI
-2. Completar events para Finance/Billing/Inventory/Auth/HR
-3. Implementar batch processing no import engine
-4. Adicionar validação de schema no import
-5. Implementar S3StorageProvider com boto3
-6. Expandir testes (negativos, multitenant, events, storage, import)
+1. ✅ ~~Implementar WebSocket endpoint em FastAPI~~
+2. ✅ ~~Completar events para Finance/Billing/Inventory/Auth/HR~~
+3. ✅ ~~Implementar batch processing no import engine~~
+4. ✅ ~~Adicionar validação de schema no import~~
+5. ✅ ~~Implementar S3StorageProvider com boto3~~
+6. Integrar eventos nos service layers dos domínios
+7. Adicionar repository mapping para import execution
+8. Implementar background tasks para imports
+9. Expandir testes (negativos, multitenant, events, storage, import)
+10. Implementar file upload endpoints para HR e Finance
 
 ---
 
