@@ -2460,3 +2460,631 @@ Criar um CRM/ERP que:
 * Permanece confiável com o tempo
 
 ````
+
+---
+
+## 🎨 FRONTEND MODERNO E UI/UX PREMIADA
+
+### Stack Frontend (OBRIGATÓRIA)
+
+* **Framework**: Next.js 14+ (App Router) com React 18+
+* **Language**: TypeScript strict mode
+* **Styling**: Tailwind CSS 3+ (utility-first)
+* **Components**: shadcn/ui (componentes acessíveis e customizáveis)
+* **Icons**: Lucide React (ícones modernos e SVG)
+* **Forms**: React Hook Form + Zod validation
+* **State**: Zustand (state management leve e moderno)
+* **Data Fetching**: SWR ou TanStack Query (cache e revalidation)
+* **Real-time**: WebSocket client com reconnection
+
+### Princípios de Design
+
+1. **Mobile-First**: Sempre começar pelo mobile e expandir
+2. **Acessibilidade**: WCAG 2.1 AA mínimo (aria-labels, keyboard nav)
+3. **Performance**: Lighthouse score 90+ (todas métricas)
+4. **Responsivo**: Breakpoints Tailwind (sm, md, lg, xl, 2xl)
+5. **Dark Mode**: Suporte nativo via Tailwind
+6. **Loading States**: Skeletons e spinners consistentes
+7. **Error Boundaries**: Tratamento gracioso de erros
+8. **Optimistic UI**: Updates imediatos com rollback
+
+### Estrutura de Componentes
+
+```
+src/
+ ├─ app/                    # Next.js App Router pages
+ │   ├─ (auth)/            # Auth layout group
+ │   │   ├─ login/
+ │   │   └─ layout.tsx
+ │   ├─ (dashboard)/       # Dashboard layout group
+ │   │   ├─ crm/
+ │   │   ├─ sales/
+ │   │   ├─ finance/
+ │   │   ├─ billing/
+ │   │   ├─ inventory/
+ │   │   ├─ hr/
+ │   │   ├─ settings/
+ │   │   └─ layout.tsx
+ │   ├─ layout.tsx         # Root layout
+ │   └─ page.tsx           # Home/redirect
+ ├─ components/            # Shared components
+ │   ├─ ui/               # shadcn/ui base components
+ │   │   ├─ button.tsx
+ │   │   ├─ card.tsx
+ │   │   ├─ table.tsx
+ │   │   ├─ form.tsx
+ │   │   ├─ dialog.tsx
+ │   │   ├─ dropdown.tsx
+ │   │   ├─ input.tsx
+ │   │   ├─ select.tsx
+ │   │   ├─ badge.tsx
+ │   │   ├─ toast.tsx
+ │   │   └─ ... 
+ │   ├─ layout/           # Layout components
+ │   │   ├─ sidebar.tsx
+ │   │   ├─ header.tsx
+ │   │   ├─ breadcrumb.tsx
+ │   │   └─ page-header.tsx
+ │   ├─ domain/           # Domain-specific components
+ │   │   ├─ crm/
+ │   │   ├─ sales/
+ │   │   └─ ...
+ │   └─ shared/           # Cross-domain components
+ │       ├─ data-table.tsx
+ │       ├─ empty-state.tsx
+ │       ├─ error-state.tsx
+ │       ├─ loading-skeleton.tsx
+ │       └─ stats-card.tsx
+ ├─ services/             # API clients (typed)
+ ├─ hooks/                # Custom React hooks
+ ├─ stores/               # Zustand stores
+ ├─ types/                # TypeScript types (generated from OpenAPI)
+ └─ lib/                  # Utilities
+     ├─ api.ts            # Axios/fetch wrapper
+     ├─ auth.ts           # Auth helpers
+     ├─ utils.ts          # Class utilities (cn, etc.)
+     └─ websocket.ts      # WebSocket client
+```
+
+### Design System
+
+**Cores (Tailwind config):**
+```typescript
+colors: {
+  primary: {...tailwindColors.blue},    // CTA principal
+  secondary: {...tailwindColors.slate}, // Backgrounds
+  success: {...tailwindColors.green},   // Success states
+  warning: {...tailwindColors.amber},   // Warnings
+  error: {...tailwindColors.red},       // Errors
+  info: {...tailwindColors.sky},        // Info messages
+}
+```
+
+**Tipografia:**
+- Heading: Inter ou Geist (font-bold, tracking-tight)
+- Body: Inter ou Geist (font-normal)
+- Code: JetBrains Mono (font-mono)
+
+**Espaçamento:**
+- Usar escala Tailwind (4, 6, 8, 12, 16, 24, 32, 48, 64)
+- Containers: max-w-7xl, padding px-4 sm:px-6 lg:px-8
+
+**Sombras:**
+- Usar shadow-sm, shadow-md, shadow-lg
+- Dark mode: ajustar sombras para borders sutis
+
+### Componentes Obrigatórios (shadcn/ui)
+
+1. **Button**: variants (default, destructive, outline, ghost, link)
+2. **Card**: com header, content, footer
+3. **Table**: com sorting, pagination, selection
+4. **Form**: integração com react-hook-form
+5. **Dialog/Modal**: acessível e responsivo
+6. **Dropdown Menu**: navegação e ações
+7. **Input/Textarea**: com labels e erros
+8. **Select**: single e multi-select
+9. **Badge**: status indicators
+10. **Toast**: notifications temporárias
+11. **Tabs**: navegação em seções
+12. **Accordion**: collapsible sections
+13. **Skeleton**: loading placeholders
+14. **Progress**: barras de progresso
+15. **Avatar**: user profiles
+
+### Padrões de UI/UX
+
+**Dashboard:**
+- Stats cards com KPIs (total, crescimento, trend)
+- Charts (Recharts ou Chart.js)
+- Recent activity list
+- Quick actions buttons
+
+**List/Table Views:**
+- Search bar (debounced)
+- Filters (sidebar ou dropdown)
+- Sorting (colunas clicáveis)
+- Pagination (numbers + prev/next)
+- Bulk actions (checkbox + toolbar)
+- Empty state com call-to-action
+
+**Form Views:**
+- Progressive disclosure (steps se necessário)
+- Inline validation (on blur)
+- Error messages abaixo do campo
+- Success feedback (toast)
+- Cancel/Save actions
+- Unsaved changes warning
+
+**Detail Views:**
+- Breadcrumb navigation
+- Action buttons (Edit, Delete)
+- Related data (tabs ou cards)
+- Activity timeline
+- Status badges
+
+### Real-time Updates
+
+```typescript
+// WebSocket hook pattern
+const useWebSocket = (tenantId: string) => {
+  const [events, setEvents] = useState<Event[]>([])
+  
+  useEffect(() => {
+    const ws = new WebSocket(`wss://api/v1/ws/${tenantId}`)
+    
+    ws.onmessage = (msg) => {
+      const event = JSON.parse(msg.data)
+      setEvents(prev => [event, ...prev])
+      
+      // Update cache based on event type
+      if (event.type === 'crm.client.created') {
+        mutate('/api/v1/crm/clients') // Revalidate SWR
+      }
+    }
+    
+    return () => ws.close()
+  }, [tenantId])
+  
+  return events
+}
+```
+
+### Geração de Tipos
+
+```bash
+# Gerar tipos TypeScript do OpenAPI spec
+npx openapi-typescript http://localhost:8000/openapi.json -o src/types/api.ts
+```
+
+---
+
+## 🧪 TESTES E2E (OBRIGATÓRIOS)
+
+### Stack de Testes
+
+* **Framework**: Playwright (cross-browser)
+* **Runner**: Playwright Test Runner
+* **Assertions**: expect API do Playwright
+* **Fixtures**: Page Object Model (POM)
+* **CI**: GitHub Actions com browsers headless
+
+### Estrutura de Testes
+
+```
+backend/
+ └─ tests/
+     ├─ e2e/                    # Testes E2E
+     │   ├─ conftest.py         # Fixtures Playwright
+     │   ├─ test_auth_flow.py   # Login, logout, session
+     │   ├─ test_crm_flow.py    # CRUD clients/leads
+     │   ├─ test_sales_flow.py  # CRUD opportunities
+     │   ├─ test_finance_flow.py
+     │   ├─ test_import_flow.py # Upload, preview, execute
+     │   └─ test_websocket.py   # Real-time events
+     ├─ integration/            # Testes de integração
+     │   ├─ test_domain_interactions.py
+     │   └─ test_event_propagation.py
+     └─ unit/                   # Testes unitários (existentes)
+         └─ test_*/
+```
+
+### Padrões de Testes E2E
+
+**Setup:**
+```python
+import pytest
+from playwright.async_api import async_playwright, Page
+
+@pytest.fixture
+async def page():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+        yield page
+        await browser.close()
+
+@pytest.fixture
+async def authenticated_page(page):
+    await page.goto('http://localhost:3000/login')
+    await page.fill('[name="email"]', 'admin@webconsig.localhost')
+    await page.fill('[name="password"]', 'admin')
+    await page.click('button[type="submit"]')
+    await page.wait_for_url('**/dashboard')
+    yield page
+```
+
+**Padrão Page Object:**
+```python
+class ClientsPage:
+    def __init__(self, page: Page):
+        self.page = page
+        self.url = '/dashboard/crm/clients'
+        
+    async def goto(self):
+        await self.page.goto(self.url)
+        
+    async def create_client(self, name, email):
+        await self.page.click('[data-testid="create-client"]')
+        await self.page.fill('[name="name"]', name)
+        await self.page.fill('[name="email"]', email)
+        await self.page.click('[data-testid="submit"]')
+        await self.page.wait_for_selector('[data-testid="success-toast"]')
+        
+    async def search(self, query):
+        await self.page.fill('[data-testid="search"]', query)
+        await self.page.wait_for_timeout(500)  # Debounce
+```
+
+**Teste E2E completo:**
+```python
+@pytest.mark.e2e
+async def test_client_crud_flow(authenticated_page):
+    page = authenticated_page
+    clients_page = ClientsPage(page)
+    
+    # Navigate
+    await clients_page.goto()
+    
+    # Create
+    await clients_page.create_client('Test Client', 'test@example.com')
+    
+    # Search
+    await clients_page.search('Test Client')
+    assert await page.is_visible('text=Test Client')
+    
+    # Edit
+    await page.click('[data-testid="edit-client"]')
+    await page.fill('[name="name"]', 'Updated Client')
+    await page.click('[data-testid="submit"]')
+    await page.wait_for_selector('text=Updated Client')
+    
+    # Delete
+    await page.click('[data-testid="delete-client"]')
+    await page.click('[data-testid="confirm-delete"]')
+    await page.wait_for_selector('[data-testid="empty-state"]')
+```
+
+### Cobertura Mínima E2E
+
+- ✅ **Auth**: login, logout, token refresh, permission denied
+- ✅ **CRUD**: create, read, update, delete para cada domínio
+- ✅ **Search/Filter**: busca e filtros funcionais
+- ✅ **Pagination**: navegação entre páginas
+- ✅ **Forms**: validação, submit, errors
+- ✅ **Import**: upload, preview, mapping, execute, errors
+- ✅ **Real-time**: WebSocket connection, event reception
+- ✅ **Navigation**: sidebar, breadcrumbs, back button
+- ✅ **Mobile**: responsive design em viewport mobile
+
+---
+
+## ⚙️ BACKGROUND TASKS (OBRIGATÓRIO)
+
+### Implementação com FastAPI BackgroundTasks
+
+**Para tarefas leves (< 30s):**
+```python
+from fastapi import BackgroundTasks
+
+async def process_import_job(job_id: UUID, db_url: str):
+    """Background task para processar import."""
+    async with create_async_session(db_url) as session:
+        job = await import_service.get_job(session, job_id)
+        # Process...
+        await import_processor.process_job(session, job, repository)
+
+@router.post("/jobs/{job_id}/execute")
+async def execute_job(
+    job_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    config = Depends(get_config),
+):
+    job = await import_service.get_job(db, tenant_id, job_id)
+    job.status = ImportStatus.processing
+    await db.commit()
+    
+    # Add to background tasks
+    background_tasks.add_task(
+        process_import_job,
+        job_id=job.id,
+        db_url=config.database_url
+    )
+    
+    return job
+```
+
+**Para tarefas pesadas (> 30s) - Redis + Celery (opcional):**
+```python
+# tasks.py
+from celery import Celery
+
+celery_app = Celery('webconsig', broker='redis://localhost:6379/0')
+
+@celery_app.task(bind=True)
+def process_import_job_async(self, job_id: str, db_url: str):
+    """Celery task para processar import."""
+    # Update progress via self.update_state()
+    self.update_state(state='PROGRESS', meta={'current': 50, 'total': 100})
+```
+
+### Progress Tracking via WebSocket
+
+```python
+async def process_import_job(job_id: UUID, db_url: str):
+    async with create_async_session(db_url) as session:
+        job = await import_service.get_job(session, job_id)
+        
+        # Emit progress events
+        await emit_import_progress(
+            tenant_id=job.tenant_id,
+            job_id=job.id,
+            current=0,
+            total=job.total_rows,
+            status='starting'
+        )
+        
+        # Process batches
+        for batch_num, batch in enumerate(batches):
+            # Process batch...
+            
+            # Emit progress
+            await emit_import_progress(
+                tenant_id=job.tenant_id,
+                job_id=job.id,
+                current=(batch_num + 1) * batch_size,
+                total=job.total_rows,
+                status='processing'
+            )
+        
+        # Emit completion
+        await emit_import_completed(
+            tenant_id=job.tenant_id,
+            job_id=job.id,
+            success_count=job.success_count,
+            error_count=job.error_count
+        )
+```
+
+---
+
+## 🚀 DEPLOY E DEVOPS
+
+### Docker Setup
+
+**Dockerfile (multi-stage):**
+```dockerfile
+# Build stage
+FROM python:3.12-slim as builder
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Production stage
+FROM python:3.12-slim
+WORKDIR /app
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY backend/ .
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+**docker-compose.yml (production):**
+```yaml
+version: '3.8'
+services:
+  backend:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://user:pass@db:5432/webconsig
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8000:8000"
+  
+  frontend:
+    build: ./frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+  
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: webconsig
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
+```
+
+### CI/CD Pipeline (GitHub Actions)
+
+**.github/workflows/ci.yml:**
+```yaml
+name: CI/CD
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.txt
+      - run: pytest backend/tests/
+  
+  test-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+      - uses: actions/setup-node@v3
+      - run: pip install -r backend/requirements.txt
+      - run: npm ci --prefix frontend
+      - run: npx playwright install
+      - run: pytest backend/tests/e2e/
+  
+  deploy-staging:
+    if: github.ref == 'refs/heads/staging'
+    needs: [test-backend, test-e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy to staging
+        run: |
+          # Deploy commands here
+          echo "Deploying to staging..."
+```
+
+### Health Checks
+
+```python
+# backend/main.py
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.get("/health/db")
+async def db_health_check(db: AsyncSession = Depends(get_db)):
+    try:
+        await db.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        return {"status": "unhealthy", "database": str(e)}
+```
+
+### Environment Variables (Staging/Production)
+
+```bash
+# .env.staging
+APP_ENV=staging
+DATABASE_URL=postgresql+asyncpg://user:pass@staging-db:5432/webconsig
+JWT_SECRET=<secure-secret>
+CORS_ORIGINS=https://staging.webconsig.com
+WEBHOOK_SECRET=<webhook-secret>
+ENABLE_TLS=true
+
+# Storage
+STORAGE_PROVIDER=s3
+S3_BUCKET=webconsig-staging
+S3_REGION=us-east-1
+AWS_ACCESS_KEY_ID=<key>
+AWS_SECRET_ACCESS_KEY=<secret>
+```
+
+---
+
+## 📋 CHECKLIST FINAL PARA PRODUÇÃO
+
+### Backend
+- [ ] Todos os endpoints documentados no OpenAPI
+- [ ] Rate limiting configurado
+- [ ] CORS configurado corretamente
+- [ ] Secrets em variáveis de ambiente
+- [ ] Logs estruturados (JSON)
+- [ ] Monitoring (Sentry ou similar)
+- [ ] Database migrations testadas
+- [ ] Background tasks funcionando
+- [ ] WebSocket com reconnection
+- [ ] Health checks implementados
+
+### Frontend
+- [ ] Todas as telas implementadas
+- [ ] Responsive (mobile, tablet, desktop)
+- [ ] Dark mode funcional
+- [ ] Loading states em todas as operações
+- [ ] Error boundaries configuradas
+- [ ] SEO otimizado (meta tags)
+- [ ] Lighthouse score 90+
+- [ ] Build otimizado (< 500KB inicial)
+- [ ] PWA configurado (opcional)
+- [ ] Analytics configurado
+
+### DevOps
+- [ ] Docker images otimizados
+- [ ] CI/CD pipeline funcionando
+- [ ] Staging environment configurado
+- [ ] SSL/TLS configurado
+- [ ] Backup automático do banco
+- [ ] Monitoring de uptime
+- [ ] Log aggregation
+- [ ] Alertas configurados
+
+### Testes
+- [ ] Unit tests > 80% coverage
+- [ ] Integration tests para fluxos críticos
+- [ ] E2E tests para user journeys
+- [ ] Load testing (opcional)
+- [ ] Security testing (opcional)
+
+---
+
+## 🎯 OBJETIVOS FINAIS EXPANDIDOS
+
+Criar um CRM/ERP que:
+
+* ✅ Cresce por adição, não por remendo
+* ✅ Pode ser mantido por humanos ou IAs
+* ✅ Permite evolução visual sem quebrar lógica
+* ✅ Permite evolução lógica sem quebrar UI
+* ✅ Permanece confiável com o tempo
+* ✅ **Interface moderna e intuitiva que encanta usuários**
+* ✅ **Performance excelente (< 2s load time)**
+* ✅ **Acessível para todos os usuários (WCAG 2.1 AA)**
+* ✅ **Deploy confiável e automatizado**
+* ✅ **Monitoramento e observabilidade completos**
+
