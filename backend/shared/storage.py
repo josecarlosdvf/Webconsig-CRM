@@ -162,8 +162,20 @@ class S3StorageProvider(StorageProvider):
     
     def __init__(self, config: StorageConfig):
         self.config = config
-        # TODO: Initialize boto3 client
-        logger.warning("S3 storage provider not fully implemented - placeholder only")
+        self.bucket = config.bucket
+        self.public_base_url = config.public_base_url
+        
+        # Initialize aioboto3 session
+        try:
+            import aioboto3
+            self.session = aioboto3.Session(
+                aws_access_key_id=config.access_key,
+                aws_secret_access_key=config.secret_key,
+                region_name=config.region,
+            )
+            logger.info(f"Initialized S3 storage provider for bucket {self.bucket}")
+        except ImportError:
+            raise ImportError("aioboto3 is required for S3 storage. Install with: pip install aioboto3")
     
     async def upload(
         self,
@@ -173,28 +185,85 @@ class S3StorageProvider(StorageProvider):
         metadata: dict | None = None,
     ) -> str:
         """Upload file to S3."""
-        # TODO: Implement with boto3
-        raise NotImplementedError("S3 storage not yet implemented")
+        async with self.session.client(
+            's3',
+            endpoint_url=self.config.endpoint,
+        ) as s3:
+            # Prepare upload parameters
+            upload_params = {
+                'Bucket': self.bucket,
+                'Key': key,
+                'Body': file.read(),
+            }
+            
+            if content_type:
+                upload_params['ContentType'] = content_type
+                
+            if metadata:
+                upload_params['Metadata'] = metadata
+            
+            # Upload to S3
+            await s3.put_object(**upload_params)
+            
+            logger.info(f"Uploaded file to S3: {self.bucket}/{key}")
+            
+            # Return public URL
+            if self.public_base_url:
+                return f"{self.public_base_url}/{key}"
+            elif self.config.endpoint:
+                return f"{self.config.endpoint}/{self.bucket}/{key}"
+            else:
+                return f"https://s3.{self.config.region}.amazonaws.com/{self.bucket}/{key}"
     
     async def download(self, key: str) -> bytes:
         """Download file from S3."""
-        # TODO: Implement with boto3
-        raise NotImplementedError("S3 storage not yet implemented")
+        async with self.session.client(
+            's3',
+            endpoint_url=self.config.endpoint,
+        ) as s3:
+            try:
+                response = await s3.get_object(Bucket=self.bucket, Key=key)
+                content = await response['Body'].read()
+                logger.info(f"Downloaded file from S3: {self.bucket}/{key}")
+                return content
+            except Exception as e:
+                logger.error(f"Failed to download from S3: {e}")
+                raise FileNotFoundError(f"File not found: {key}")
     
     async def delete(self, key: str) -> None:
         """Delete file from S3."""
-        # TODO: Implement with boto3
-        raise NotImplementedError("S3 storage not yet implemented")
+        async with self.session.client(
+            's3',
+            endpoint_url=self.config.endpoint,
+        ) as s3:
+            await s3.delete_object(Bucket=self.bucket, Key=key)
+            logger.info(f"Deleted file from S3: {self.bucket}/{key}")
     
     async def exists(self, key: str) -> bool:
         """Check if file exists in S3."""
-        # TODO: Implement with boto3
-        raise NotImplementedError("S3 storage not yet implemented")
+        async with self.session.client(
+            's3',
+            endpoint_url=self.config.endpoint,
+        ) as s3:
+            try:
+                await s3.head_object(Bucket=self.bucket, Key=key)
+                return True
+            except Exception:
+                return False
     
     async def generate_signed_url(self, key: str, expires_in: int = 3600) -> str:
         """Generate S3 pre-signed URL."""
-        # TODO: Implement with boto3
-        raise NotImplementedError("S3 storage not yet implemented")
+        async with self.session.client(
+            's3',
+            endpoint_url=self.config.endpoint,
+        ) as s3:
+            url = await s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': self.bucket, 'Key': key},
+                ExpiresIn=expires_in
+            )
+            logger.info(f"Generated signed URL for {self.bucket}/{key} (expires in {expires_in}s)")
+            return url
 
 
 def create_storage_provider(config: StorageConfig) -> StorageProvider:

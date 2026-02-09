@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 import importlib
 
-from api import audit, auth, billing, crm, extensions, finance, hr, inventory, sales
+from api import audit, auth, billing, crm, extensions, finance, hr, inventory, sales, websocket
 
 import_api = importlib.import_module("api.import")
 
@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
     app.include_router(audit.router)
     app.include_router(import_api.router)
     app.include_router(extensions.router)
+    app.include_router(websocket.router)
 
     return app
 

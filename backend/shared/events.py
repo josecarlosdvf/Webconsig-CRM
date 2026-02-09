@@ -138,14 +138,53 @@ class EventBus:
             # TODO: Remove closed connections from registry
             
     async def _dispatch_webhook(self, event: Event) -> None:
-        """Dispatch event to webhook URL for the tenant."""
+        """Dispatch event to webhook URL for the tenant with retry logic."""
         webhook_url = self._webhook_urls.get(event.tenant_id)
         if not webhook_url:
             return
             
-        # TODO: Implement webhook dispatch with retry logic
-        # For now, this is a placeholder
-        logger.info(f"Would dispatch webhook to {webhook_url} for event {event.type}")
+        # Serialize event
+        payload = event.model_dump(mode="json")
+        
+        # Import httpx for webhook dispatch
+        import httpx
+        
+        # Retry configuration
+        max_retries = 3
+        base_delay = 1.0  # seconds
+        max_delay = 60.0  # seconds
+        
+        for attempt in range(max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        webhook_url,
+                        json=payload,
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-Event-Type": event.type,
+                            "X-Event-Id": str(event.id),
+                            "X-Tenant-Id": str(event.tenant_id),
+                        }
+                    )
+                    
+                    # Check if successful
+                    if response.status_code in (200, 201, 202, 204):
+                        logger.info(f"Webhook dispatched successfully to {webhook_url} for event {event.type}")
+                        return
+                    else:
+                        logger.warning(f"Webhook returned status {response.status_code}: {response.text}")
+                        
+            except Exception as e:
+                logger.error(f"Webhook dispatch error (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                
+            # If not last attempt, wait with exponential backoff
+            if attempt < max_retries:
+                delay = min(base_delay * (2 ** attempt), max_delay)
+                logger.info(f"Retrying webhook in {delay}s...")
+                await asyncio.sleep(delay)
+            else:
+                logger.error(f"Webhook dispatch failed after {max_retries + 1} attempts for event {event.type}")
         
     def register_websocket(self, tenant_id: UUID, websocket: Any) -> None:
         """Register a WebSocket connection for a tenant."""
