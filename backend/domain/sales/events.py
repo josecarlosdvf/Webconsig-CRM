@@ -1,0 +1,1 @@
+"""Sales domain events (placeholder)."""
