@@ -30,6 +30,7 @@ from domain.finance.schemas import (
 	ReceivableUpdateRequest,
 )
 from domain.finance.models import Account, Company, Payable, Payment, Receivable
+from domain.finance import events
 from shared.exceptions import not_found, validation_error
 from shared.pagination import PaginatedResponse
 from shared.validators import validate_fk_same_tenant
@@ -104,10 +105,15 @@ class FinanceService:
 		return await repository.list_companies(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_company(
-		self, session: AsyncSession, tenant_id: UUID, data: CompanyCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: CompanyCreateRequest, actor_id: UUID | None = None
 	) -> Company:
 		company = Company(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_company(session, company)
+		result = await repository.create_company(session, company)
+		
+		# Emit event
+		await events.emit_company_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_company(
 		self, session: AsyncSession, tenant_id: UUID, company_id: UUID
@@ -143,10 +149,15 @@ class FinanceService:
 		return await repository.list_accounts(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_account(
-		self, session: AsyncSession, tenant_id: UUID, data: AccountCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: AccountCreateRequest, actor_id: UUID | None = None
 	) -> Account:
 		account = Account(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_account(session, account)
+		result = await repository.create_account(session, account)
+		
+		# Emit event
+		await events.emit_account_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_account(
 		self, session: AsyncSession, tenant_id: UUID, account_id: UUID
@@ -182,7 +193,7 @@ class FinanceService:
 		return await repository.list_payments(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_payment(
-		self, session: AsyncSession, tenant_id: UUID, data: PaymentCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: PaymentCreateRequest, actor_id: UUID | None = None
 	) -> Payment:
 		# Validate FKs belong to same tenant
 		await validate_fk_same_tenant(
@@ -193,7 +204,12 @@ class FinanceService:
 		)
 		
 		payment = Payment(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_payment(session, payment)
+		result = await repository.create_payment(session, payment)
+		
+		# Emit event
+		await events.emit_payment_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_payment(
 		self, session: AsyncSession, tenant_id: UUID, payment_id: UUID
@@ -204,13 +220,18 @@ class FinanceService:
 		return payment
 
 	async def confirm_payment(
-		self, session: AsyncSession, tenant_id: UUID, payment_id: UUID
+		self, session: AsyncSession, tenant_id: UUID, payment_id: UUID, actor_id: UUID | None = None
 	) -> Payment:
 		payment = await self.get_payment(session, tenant_id, payment_id)
 		if payment.status != PaymentStatus.confirmed:
 			self._validate_payment_status(payment.status, PaymentStatus.confirmed)
 		payment.status = PaymentStatus.confirmed
-		return await repository.update_payment(session, payment)
+		result = await repository.update_payment(session, payment)
+		
+		# Emit event
+		await events.emit_payment_confirmed(tenant_id, payment_id, actor_id)
+		
+		return result
 
 	async def list_payables(
 		self,
@@ -224,7 +245,7 @@ class FinanceService:
 		return await repository.list_payables(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_payable(
-		self, session: AsyncSession, tenant_id: UUID, data: PayableCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: PayableCreateRequest, actor_id: UUID | None = None
 	) -> Payable:
 		# Validate FKs belong to same tenant
 		await validate_fk_same_tenant(
@@ -235,7 +256,12 @@ class FinanceService:
 		)
 		
 		payable = Payable(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_payable(session, payable)
+		result = await repository.create_payable(session, payable)
+		
+		# Emit event
+		await events.emit_payable_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_payable(
 		self, session: AsyncSession, tenant_id: UUID, payable_id: UUID
@@ -260,14 +286,19 @@ class FinanceService:
 		return await repository.update_payable(session, payable)
 
 	async def pay_payable(
-		self, session: AsyncSession, tenant_id: UUID, payable_id: UUID
+		self, session: AsyncSession, tenant_id: UUID, payable_id: UUID, actor_id: UUID | None = None
 	) -> Payable:
 		payable = await self.get_payable(session, tenant_id, payable_id)
 		if payable.status != PayableStatus.paid:
 			self._validate_payable_status(payable.status, PayableStatus.paid)
 		payable.status = PayableStatus.paid
 		payable.paid_at = datetime.now(timezone.utc)
-		return await repository.update_payable(session, payable)
+		result = await repository.update_payable(session, payable)
+		
+		# Emit event
+		await events.emit_payable_paid(tenant_id, payable_id, actor_id)
+		
+		return result
 
 	async def list_receivables(
 		self,
@@ -283,7 +314,7 @@ class FinanceService:
 		)
 
 	async def create_receivable(
-		self, session: AsyncSession, tenant_id: UUID, data: ReceivableCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: ReceivableCreateRequest, actor_id: UUID | None = None
 	) -> Receivable:
 		# Validate FKs belong to same tenant
 		await validate_fk_same_tenant(
@@ -294,7 +325,12 @@ class FinanceService:
 		)
 		
 		receivable = Receivable(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_receivable(session, receivable)
+		result = await repository.create_receivable(session, receivable)
+		
+		# Emit event
+		await events.emit_receivable_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_receivable(
 		self, session: AsyncSession, tenant_id: UUID, receivable_id: UUID
@@ -319,14 +355,19 @@ class FinanceService:
 		return await repository.update_receivable(session, receivable)
 
 	async def confirm_receivable(
-		self, session: AsyncSession, tenant_id: UUID, receivable_id: UUID
+		self, session: AsyncSession, tenant_id: UUID, receivable_id: UUID, actor_id: UUID | None = None
 	) -> Receivable:
 		receivable = await self.get_receivable(session, tenant_id, receivable_id)
 		if receivable.status != ReceivableStatus.confirmed:
 			self._validate_receivable_status(receivable.status, ReceivableStatus.confirmed)
 		receivable.status = ReceivableStatus.confirmed
 		receivable.received_at = datetime.now(timezone.utc)
-		return await repository.update_receivable(session, receivable)
+		result = await repository.update_receivable(session, receivable)
+		
+		# Emit event
+		await events.emit_receivable_confirmed(tenant_id, receivable_id, actor_id)
+		
+		return result
 
 	def _validate_company_status(
 		self, current_status: CompanyStatus, new_status: CompanyStatus

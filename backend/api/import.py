@@ -40,8 +40,35 @@ def _format_from_filename(filename: str) -> ImportFileFormat:
 
 @router.get("/templates/{domain}/{entity}")
 async def download_template(domain: str, entity: str) -> Response:
-	content = "".encode("utf-8")
-	return Response(content=content, media_type="text/csv")
+	"""Download CSV template with headers for the specified domain/entity."""
+	from shared.import_processor import get_import_schema
+	
+	# Get schema for the entity
+	schema = get_import_schema(domain, entity)
+	
+	if not schema:
+		raise HTTPException(status_code=404, detail=f"No schema found for {domain}.{entity}")
+	
+	# Extract field names from schema
+	fields = list(schema.model_fields.keys())
+	
+	# Generate CSV header
+	import csv
+	import io
+	
+	output = io.StringIO()
+	writer = csv.writer(output)
+	writer.writerow(fields)
+	
+	content = output.getvalue().encode("utf-8")
+	
+	return Response(
+		content=content,
+		media_type="text/csv",
+		headers={
+			"Content-Disposition": f'attachment; filename="{domain}_{entity}_template.csv"'
+		}
+	)
 
 
 @router.get("/jobs", response_model=PaginatedResponse[ImportJobResponse])
@@ -72,7 +99,26 @@ async def create_job(
 	tenant_id: UUID = Depends(get_tenant_id),
 	current_user: CurrentUser = Depends(get_current_user),
 ):
+	"""Create a new import job and upload file to storage."""
+	from shared.storage import get_storage, generate_storage_key
+	
+	# Validate file format
 	file_format = _format_from_filename(file.filename)
+	
+	# Upload file to storage
+	storage = get_storage()
+	storage_key = generate_storage_key(tenant_id, "import", file.filename)
+	
+	# Read and upload file
+	file_content = await file.read()
+	import io
+	file_url = await storage.upload(
+		file=io.BytesIO(file_content),
+		key=storage_key,
+		content_type=file.content_type,
+	)
+	
+	# Create import job
 	job = await import_service.create_job(
 		db,
 		tenant_id=tenant_id,
@@ -80,9 +126,11 @@ async def create_job(
 		domain=data.domain,
 		entity=data.entity,
 		file_name=file.filename,
-		file_url=f"storage://{file.filename}",
+		file_url=file_url,
 		file_format=file_format,
 	)
+	
+	# Log action
 	ip_address, user_agent = _request_context(request)
 	await log_action(
 		db,
@@ -98,8 +146,9 @@ async def create_job(
 		user_agent=user_agent,
 		endpoint=str(request.url.path),
 		occurred_at=datetime.now(timezone.utc),
-		metadata={"job_id": str(job.id)},
+		metadata={"job_id": str(job.id), "file_size": len(file_content)},
 	)
+	
 	await db.commit()
 	await db.refresh(job)
 	return job
@@ -122,14 +171,54 @@ async def preview_job(
 	tenant_id: UUID = Depends(get_tenant_id),
 	current_user: CurrentUser = Depends(get_current_user),
 ):
+	"""Preview import job with file columns, schema fields, and suggested mapping."""
+	from shared.storage import get_storage
+	from shared.import_engine import create_parser, suggest_column_mapping
+	from shared.import_processor import get_import_schema
+	
 	job = await import_service.get_job(db, tenant_id, job_id)
+	
+	# Download file from storage
+	storage = get_storage()
+	storage_key = job.file_url.split("/")[-1] if "/" in job.file_url else job.file_url
+	
+	# For local storage, extract key properly
+	if "storage" in job.file_url:
+		parts = job.file_url.split("/")
+		storage_key = "/".join(parts[3:]) if len(parts) > 3 else storage_key
+	
+	try:
+		file_content = await storage.download(storage_key)
+	except FileNotFoundError:
+		raise HTTPException(status_code=404, detail="Import file not found in storage")
+	
+	# Parse file
+	parser = create_parser(job.file_format.value)
+	import io
+	file_obj = io.BytesIO(file_content)
+	columns, rows = parser.parse(file_obj)
+	
+	# Get schema fields
+	schema = get_import_schema(job.domain, job.entity)
+	schema_fields = list(schema.model_fields.keys()) if schema else []
+	
+	# Suggest column mapping
+	suggested_mapping = suggest_column_mapping(columns, schema_fields)
+	
+	# Get sample rows (first 5)
+	sample_rows = rows[:5]
+	
+	# Update job total_rows
+	job.total_rows = len(rows)
+	await db.commit()
+	
 	return ImportPreviewResponse(
 		job_id=job.id,
-		file_columns=[],
-		schema_fields=[],
-		suggested_mapping={},
-		sample_rows=[],
-		total_rows=job.total_rows,
+		file_columns=columns,
+		schema_fields=schema_fields,
+		suggested_mapping=suggested_mapping,
+		sample_rows=sample_rows,
+		total_rows=len(rows),
 	)
 
 
@@ -177,16 +266,41 @@ async def execute_job(
 	tenant_id: UUID = Depends(get_tenant_id),
 	current_user: CurrentUser = Depends(get_current_user),
 ):
+	"""
+	Execute import job with batch processing.
+	
+	Uses repository mapping to insert data into the appropriate domain.
+	Processing is synchronous for now - in production, use BackgroundTasks or Celery.
+	"""
+	from shared.import_processor import import_processor
+	from shared.import_repository_map import get_repository_adapter
+	
 	job = await import_service.get_job(db, tenant_id, job_id)
+	
+	# Get repository adapter for this domain.entity
+	repository_adapter = get_repository_adapter(job.domain, job.entity)
+	
+	if not repository_adapter:
+		raise HTTPException(
+			status_code=400,
+			detail=f"Import not supported for {job.domain}.{job.entity}"
+		)
+	
+	# Start processing
 	job = await import_service.start_processing(db, job)
-	job = await import_service.complete_job(
-		db,
-		job,
-		success_count=0,
-		error_count=0,
-		duplicate_count=0,
-		errors=[],
-	)
+	await db.commit()
+	
+	try:
+		# Process with actual repository
+		# Note: This is synchronous - in production, use background tasks
+		job = await import_processor.process_job(db, job, repository_adapter)
+		
+	except Exception as e:
+		job.status = "failed"
+		job.errors = [{"error": str(e)}]
+		await db.commit()
+		raise HTTPException(status_code=500, detail=f"Import failed: {e}")
+	
 	await db.commit()
 	await db.refresh(job)
 	return job

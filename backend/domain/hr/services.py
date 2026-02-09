@@ -44,6 +44,7 @@ from domain.hr.schemas import (
 	TimeEntryFilters,
 )
 from domain.hr.models import Absence, Contract, Document, LeaveRequest, Recruitment, TimeEntry
+from domain.hr import events
 from domain.finance.models import Company
 from shared.exceptions import not_found, validation_error
 from shared.pagination import PaginatedResponse
@@ -116,7 +117,12 @@ class HrService:
 		)
 		
 		employee = Employee(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_employee(session, employee)
+		result = await repository.create_employee(session, employee)
+		
+		# Emit event
+		await events.emit_employee_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_employee(
 		self, session: AsyncSession, tenant_id: UUID, employee_id: UUID
@@ -146,6 +152,7 @@ class HrService:
 		tenant_id: UUID,
 		employee_id: UUID,
 		data: EmployeeTerminateRequest,
+		actor_id: UUID | None = None,
 	) -> Employee:
 		employee = await self.get_employee(session, tenant_id, employee_id)
 		self._validate_employee_status(employee.status, EmployeeStatus.terminated)
@@ -162,17 +169,25 @@ class HrService:
 		page: int,
 		page_size: int,
 		sort: str | None = None,
+		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Recruitment]:
 		return await repository.list_recruitments(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_recruitment(
-		self, session: AsyncSession, tenant_id: UUID, data: RecruitmentCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: RecruitmentCreateRequest,
+		actor_id: UUID | None = None,
 	) -> Recruitment:
 		recruitment = Recruitment(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_recruitment(session, recruitment)
+		result = await repository.create_recruitment(session, recruitment)
+		
+		# Emit event
+		await events.emit_recruitment_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_recruitment(
-		self, session: AsyncSession, tenant_id: UUID, recruitment_id: UUID
+		self, session: AsyncSession, tenant_id: UUID, recruitment_id: UUID,
+		actor_id: UUID | None = None,
 	) -> Recruitment:
 		recruitment = await repository.get_recruitment(session, tenant_id, recruitment_id)
 		if not recruitment:
@@ -185,6 +200,7 @@ class HrService:
 		tenant_id: UUID,
 		recruitment_id: UUID,
 		data: RecruitmentUpdateRequest,
+		actor_id: UUID | None = None,
 	) -> Recruitment:
 		recruitment = await self.get_recruitment(session, tenant_id, recruitment_id)
 		for key, value in data.model_dump(exclude_unset=True).items():
@@ -201,11 +217,13 @@ class HrService:
 		page: int,
 		page_size: int,
 		sort: str | None = None,
+		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Candidate]:
 		return await repository.list_candidates(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_candidate(
-		self, session: AsyncSession, tenant_id: UUID, data: CandidateCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: CandidateCreateRequest,
+		actor_id: UUID | None = None,
 	) -> Candidate:
 		# Validate recruitment belongs to same tenant
 		await validate_fk_same_tenant(
@@ -213,10 +231,16 @@ class HrService:
 		)
 		
 		candidate = Candidate(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_candidate(session, candidate)
+		result = await repository.create_candidate(session, candidate)
+		
+		# Emit event
+		await events.emit_candidate_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_candidate(
-		self, session: AsyncSession, tenant_id: UUID, candidate_id: UUID
+		self, session: AsyncSession, tenant_id: UUID, candidate_id: UUID,
+		actor_id: UUID | None = None,
 	) -> Candidate:
 		candidate = await repository.get_candidate(session, tenant_id, candidate_id)
 		if not candidate:
@@ -229,16 +253,23 @@ class HrService:
 		tenant_id: UUID,
 		candidate_id: UUID,
 		data: CandidateUpdateRequest,
+		actor_id: UUID | None = None,
 	) -> Candidate:
 		candidate = await self.get_candidate(session, tenant_id, candidate_id)
 		for key, value in data.model_dump(exclude_unset=True).items():
 			if key == "status" and value is not None and value != candidate.status:
 				self._validate_candidate_status(candidate.status, value)
 			setattr(candidate, key, value)
-		return await repository.update_candidate(session, candidate)
+		result = await repository.update_candidate(session, candidate)
+		
+		# Emit event
+		await events.emit_candidate_stage_changed(tenant_id, candidate_id, candidate.status.value, new_status.value, actor_id)
+		
+		return result
 
 	async def advance_candidate(
-		self, session: AsyncSession, tenant_id: UUID, candidate_id: UUID, stage: CandidateStatus
+		self, session: AsyncSession, tenant_id: UUID, candidate_id: UUID, stage: CandidateStatus,
+		actor_id: UUID | None = None,
 	) -> Candidate:
 		candidate = await self.get_candidate(session, tenant_id, candidate_id)
 		if stage != candidate.status:
@@ -254,11 +285,13 @@ class HrService:
 		page: int,
 		page_size: int,
 		sort: str | None = None,
+		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Absence]:
 		return await repository.list_absences(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_absence(
-		self, session: AsyncSession, tenant_id: UUID, data: AbsenceCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: AbsenceCreateRequest,
+		actor_id: UUID | None = None,
 	) -> Absence:
 		# Validate employee belongs to same tenant
 		await validate_fk_same_tenant(
@@ -266,7 +299,12 @@ class HrService:
 		)
 		
 		absence = Absence(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_absence(session, absence)
+		result = await repository.create_absence(session, absence)
+		
+		# Emit event
+		await events.emit_absence_recorded(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def list_time_entries(
 		self,
@@ -276,11 +314,13 @@ class HrService:
 		page: int,
 		page_size: int,
 		sort: str | None = None,
+		actor_id: UUID | None = None,
 	) -> PaginatedResponse[TimeEntry]:
 		return await repository.list_time_entries(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_time_entry(
-		self, session: AsyncSession, tenant_id: UUID, data: TimeEntryCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: TimeEntryCreateRequest,
+		actor_id: UUID | None = None,
 	) -> TimeEntry:
 		# Validate employee belongs to same tenant
 		await validate_fk_same_tenant(
@@ -288,17 +328,28 @@ class HrService:
 		)
 		
 		time_entry = TimeEntry(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_time_entry(session, time_entry)
+		result = await repository.create_time_entry(session, time_entry)
+		
+		# Emit event
+		await events.emit_time_entry_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def approve_time_entry(
-		self, session: AsyncSession, tenant_id: UUID, time_entry_id: UUID
+		self, session: AsyncSession, tenant_id: UUID, time_entry_id: UUID,
+		actor_id: UUID | None = None,
 	) -> TimeEntry:
 		time_entry = await repository.get_time_entry(session, tenant_id, time_entry_id)
 		if not time_entry:
 			raise not_found("Time entry not found")
 		self._validate_time_entry_status(time_entry.status, TimeEntryStatus.approved)
 		time_entry.status = TimeEntryStatus.approved
-		return await repository.update_time_entry(session, time_entry)
+		result = await repository.update_time_entry(session, time_entry)
+		
+		# Emit event
+		await events.emit_time_entry_approved(tenant_id, time_entry_id, actor_id)
+		
+		return result
 
 	async def list_leave_requests(
 		self,
@@ -308,13 +359,15 @@ class HrService:
 		page: int,
 		page_size: int,
 		sort: str | None = None,
+		actor_id: UUID | None = None,
 	) -> PaginatedResponse[LeaveRequest]:
 		return await repository.list_leave_requests(
 			session, tenant_id, filters, page, page_size, sort
 		)
 
 	async def create_leave_request(
-		self, session: AsyncSession, tenant_id: UUID, data: LeaveRequestCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: LeaveRequestCreateRequest,
+		actor_id: UUID | None = None,
 	) -> LeaveRequest:
 		# Validate employee belongs to same tenant
 		await validate_fk_same_tenant(
@@ -322,10 +375,16 @@ class HrService:
 		)
 		
 		leave_request = LeaveRequest(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_leave_request(session, leave_request)
+		result = await repository.create_leave_request(session, leave_request)
+		
+		# Emit event
+		await events.emit_leave_requested(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def approve_leave_request(
-		self, session: AsyncSession, tenant_id: UUID, leave_request_id: UUID
+		self, session: AsyncSession, tenant_id: UUID, leave_request_id: UUID,
+		actor_id: UUID | None = None,
 	) -> LeaveRequest:
 		leave_request = await repository.get_leave_request(session, tenant_id, leave_request_id)
 		if not leave_request:
@@ -334,7 +393,12 @@ class HrService:
 			leave_request.status, LeaveRequestStatus.approved
 		)
 		leave_request.status = LeaveRequestStatus.approved
-		return await repository.update_leave_request(session, leave_request)
+		result = await repository.update_leave_request(session, leave_request)
+		
+		# Emit event
+		await events.emit_leave_approved(tenant_id, leave_request_id, actor_id)
+		
+		return result
 
 	async def list_documents(
 		self,
@@ -344,11 +408,13 @@ class HrService:
 		page: int,
 		page_size: int,
 		sort: str | None = None,
+		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Document]:
 		return await repository.list_documents(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_document(
-		self, session: AsyncSession, tenant_id: UUID, data: DocumentCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: DocumentCreateRequest,
+		actor_id: UUID | None = None,
 	) -> Document:
 		# Validate employee belongs to same tenant
 		await validate_fk_same_tenant(
@@ -356,7 +422,12 @@ class HrService:
 		)
 		
 		document = Document(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_document(session, document)
+		result = await repository.create_document(session, document)
+		
+		# Emit event
+		await events.emit_document_uploaded(tenant_id, result.id, data.employee_id, data.type.value, actor_id)
+		
+		return result
 
 	async def list_contracts(
 		self,
@@ -366,11 +437,13 @@ class HrService:
 		page: int,
 		page_size: int,
 		sort: str | None = None,
+		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Contract]:
 		return await repository.list_contracts(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_contract(
-		self, session: AsyncSession, tenant_id: UUID, data: ContractCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: ContractCreateRequest,
+		actor_id: UUID | None = None,
 	) -> Contract:
 		# Validate FKs belong to same tenant
 		await validate_fk_same_tenant(
@@ -381,7 +454,12 @@ class HrService:
 		)
 		
 		contract = Contract(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_contract(session, contract)
+		result = await repository.create_contract(session, contract)
+		
+		# Emit event
+		await events.emit_contract_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def list_benefits(
 		self,
@@ -391,14 +469,21 @@ class HrService:
 		page: int,
 		page_size: int,
 		sort: str | None = None,
+		actor_id: UUID | None = None,
 	) -> PaginatedResponse[Benefit]:
 		return await repository.list_benefits(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_benefit(
-		self, session: AsyncSession, tenant_id: UUID, data: BenefitCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: BenefitCreateRequest,
+		actor_id: UUID | None = None,
 	) -> Benefit:
 		benefit = Benefit(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_benefit(session, benefit)
+		result = await repository.create_benefit(session, benefit)
+		
+		# Emit event
+		await events.emit_benefit_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def assign_benefit(
 		self,
@@ -406,15 +491,22 @@ class HrService:
 		tenant_id: UUID,
 		benefit_id: UUID,
 		data: BenefitAssignRequest,
+		actor_id: UUID | None = None,
 	) -> Benefit:
 		benefit = await repository.get_benefit(session, tenant_id, benefit_id)
 		if not benefit:
 			raise not_found("Benefit not found")
 		benefit.employee_id = data.employee_id
-		return await repository.update_benefit(session, benefit)
+		result = await repository.update_benefit(session, benefit)
+		
+		# Emit event
+		await events.emit_benefit_assigned(tenant_id, benefit_id, data.employee_id, actor_id)
+		
+		return result
 
 	def _validate_employee_status(
-		self, current_status: EmployeeStatus, new_status: EmployeeStatus
+		self, current_status: EmployeeStatus, new_status: EmployeeStatus,
+		actor_id: UUID | None = None,
 	) -> None:
 		allowed = VALID_EMPLOYEE_STATUS_TRANSITIONS.get(current_status, set())
 		if new_status not in allowed:

@@ -12,6 +12,7 @@ from domain.inventory.schemas import (
 	ItemUpdateRequest,
 	StockAdjustmentRequest,
 )
+from domain.inventory import events
 from shared.exceptions import not_found, validation_error
 from shared.pagination import PaginatedResponse
 
@@ -35,10 +36,15 @@ class InventoryService:
 		return await repository.list_items(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_item(
-		self, session: AsyncSession, tenant_id: UUID, data: ItemCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: ItemCreateRequest, actor_id: UUID | None = None
 	) -> Item:
 		item = Item(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_item(session, item)
+		result = await repository.create_item(session, item)
+		
+		# Emit event
+		await events.emit_item_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_item(self, session: AsyncSession, tenant_id: UUID, item_id: UUID) -> Item:
 		item = await repository.get_item(session, tenant_id, item_id)
@@ -61,10 +67,22 @@ class InventoryService:
 		return await repository.update_item(session, item)
 
 	async def adjust_stock(
-		self, session: AsyncSession, tenant_id: UUID, data: StockAdjustmentRequest
+		self, session: AsyncSession, tenant_id: UUID, data: StockAdjustmentRequest, actor_id: UUID | None = None
 	) -> StockAdjustment:
 		adjustment = StockAdjustment(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_stock_adjustment(session, adjustment)
+		result = await repository.create_stock_adjustment(session, adjustment)
+		
+		# Emit event
+		await events.emit_stock_adjusted(
+			tenant_id=tenant_id,
+			item_id=data.item_id,
+			adjustment_id=result.id,
+			delta=data.delta,
+			reason=data.reason,
+			actor_id=actor_id
+		)
+		
+		return result
 
 	def _validate_status_transition(
 		self, current_status: ItemStatus, new_status: ItemStatus

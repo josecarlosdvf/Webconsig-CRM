@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from domain.billing import repository
 from domain.billing.models import Invoice, InvoiceStatus
 from domain.billing.schemas import InvoiceCreateRequest, InvoiceFilters, InvoiceUpdateRequest
+from domain.billing import events
 from domain.crm.models import Client
 from domain.finance.models import Company
 from shared.exceptions import not_found, validation_error
@@ -36,7 +37,7 @@ class BillingService:
 		return await repository.list_invoices(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_invoice(
-		self, session: AsyncSession, tenant_id: UUID, data: InvoiceCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: InvoiceCreateRequest, actor_id: UUID | None = None
 	) -> Invoice:
 		# Validate FKs belong to same tenant
 		await validate_fk_same_tenant(
@@ -47,7 +48,12 @@ class BillingService:
 		)
 		
 		invoice = Invoice(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_invoice(session, invoice)
+		result = await repository.create_invoice(session, invoice)
+		
+		# Emit event
+		await events.emit_invoice_created(tenant_id, result.id, actor_id)
+		
+		return result
 
 	async def get_invoice(
 		self, session: AsyncSession, tenant_id: UUID, invoice_id: UUID
@@ -72,13 +78,18 @@ class BillingService:
 		return await repository.update_invoice(session, invoice)
 
 	async def mark_paid(
-		self, session: AsyncSession, tenant_id: UUID, invoice_id: UUID
+		self, session: AsyncSession, tenant_id: UUID, invoice_id: UUID, actor_id: UUID | None = None
 	) -> Invoice:
 		invoice = await self.get_invoice(session, tenant_id, invoice_id)
 		if invoice.status != InvoiceStatus.paid:
 			self._validate_status_transition(invoice.status, InvoiceStatus.paid)
 		invoice.status = InvoiceStatus.paid
-		return await repository.update_invoice(session, invoice)
+		result = await repository.update_invoice(session, invoice)
+		
+		# Emit event
+		await events.emit_invoice_paid(tenant_id, invoice_id, actor_id)
+		
+		return result
 
 	def _validate_status_transition(
 		self, current_status: InvoiceStatus, new_status: InvoiceStatus

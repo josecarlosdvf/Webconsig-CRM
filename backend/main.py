@@ -4,13 +4,17 @@ from fastapi import FastAPI
 
 import importlib
 
-from api import audit, auth, billing, crm, extensions, finance, hr, inventory, sales
+from api import audit, auth, billing, crm, extensions, finance, hr, inventory, sales, websocket
 
 import_api = importlib.import_module("api.import")
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Webconsig CRM/ERP", version="1.0.0")
+
+    # Setup import schemas on startup
+    from shared.import_registry import setup_import_schemas
+    setup_import_schemas()
 
     app.include_router(crm.router)
     app.include_router(sales.router)
@@ -22,6 +26,7 @@ def create_app() -> FastAPI:
     app.include_router(audit.router)
     app.include_router(import_api.router)
     app.include_router(extensions.router)
+    app.include_router(websocket.router)
 
     return app
 
