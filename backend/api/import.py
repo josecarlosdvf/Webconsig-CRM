@@ -269,34 +269,31 @@ async def execute_job(
 	"""
 	Execute import job with batch processing.
 	
-	Note: This is a placeholder implementation. Full implementation requires:
-	1. Repository mapping per domain/entity
-	2. Background task processing (FastAPI BackgroundTasks or Celery)
-	3. WebSocket notifications for progress updates
-	
-	For now, this validates the flow but doesn't actually insert data.
+	Uses repository mapping to insert data into the appropriate domain.
+	Processing is synchronous for now - in production, use BackgroundTasks or Celery.
 	"""
 	from shared.import_processor import import_processor
+	from shared.import_repository_map import get_repository_adapter
 	
 	job = await import_service.get_job(db, tenant_id, job_id)
+	
+	# Get repository adapter for this domain.entity
+	repository_adapter = get_repository_adapter(job.domain, job.entity)
+	
+	if not repository_adapter:
+		raise HTTPException(
+			status_code=400,
+			detail=f"Import not supported for {job.domain}.{job.entity}"
+		)
 	
 	# Start processing
 	job = await import_service.start_processing(db, job)
 	await db.commit()
 	
-	# TODO: In production, this should be a background task
-	# For now, we'll use dry_run mode to validate without inserting
-	job.options["dry_run"] = True
-	
 	try:
-		# Process with mock repository (placeholder)
-		# In production, this would map domain.entity to the appropriate repository
-		class MockRepository:
-			async def create(self, session, tenant_id, data):
-				pass  # No-op for now
-		
-		repository = MockRepository()
-		job = await import_processor.process_job(db, job, repository)
+		# Process with actual repository
+		# Note: This is synchronous - in production, use background tasks
+		job = await import_processor.process_job(db, job, repository_adapter)
 		
 	except Exception as e:
 		job.status = "failed"
