@@ -14,6 +14,7 @@ from domain.crm.schemas import (
 	LeadFilters,
 	LeadUpdateRequest,
 )
+from domain.crm import events
 from shared.exceptions import conflict, not_found, validation_error
 from shared.pagination import PaginatedResponse
 
@@ -51,11 +52,16 @@ class CrmService:
 		return await repository.list_clients(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_client(
-		self, session: AsyncSession, tenant_id: UUID, data: ClientCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: ClientCreateRequest, actor_id: UUID | None = None
 	) -> Client:
 		"""Create a new client."""
 		client = Client(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_client(session, client)
+		client = await repository.create_client(session, client)
+		
+		# Emit event
+		await events.emit_client_created(tenant_id, client.id, actor_id)
+		
+		return client
 
 	async def get_client(
 		self, session: AsyncSession, tenant_id: UUID, client_id: UUID
@@ -72,9 +78,12 @@ class CrmService:
 		tenant_id: UUID,
 		client_id: UUID,
 		data: ClientUpdateRequest,
+		actor_id: UUID | None = None,
 	) -> Client:
 		"""Update a client with state transition validation."""
 		client = await self.get_client(session, tenant_id, client_id)
+		
+		old_status = client.status
 		
 		# Validate status transition if status is being changed
 		if data.status is not None and data.status != client.status:
@@ -83,7 +92,14 @@ class CrmService:
 		# Apply updates
 		for key, value in data.model_dump(exclude_unset=True).items():
 			setattr(client, key, value)
-		return await repository.update_client(session, client)
+		
+		client = await repository.update_client(session, client)
+		
+		# Emit event if status changed
+		if data.status is not None and data.status != old_status:
+			await events.emit_client_status_changed(tenant_id, client.id, old_status.value, data.status.value, actor_id)
+		
+		return client
 
 	async def delete_client(
 		self, session: AsyncSession, tenant_id: UUID, client_id: UUID
@@ -119,11 +135,16 @@ class CrmService:
 		return await repository.list_leads(session, tenant_id, filters, page, page_size, sort)
 
 	async def create_lead(
-		self, session: AsyncSession, tenant_id: UUID, data: LeadCreateRequest
+		self, session: AsyncSession, tenant_id: UUID, data: LeadCreateRequest, actor_id: UUID | None = None
 	) -> Lead:
 		"""Create a new lead."""
 		lead = Lead(tenant_id=tenant_id, **data.model_dump())
-		return await repository.create_lead(session, lead)
+		lead = await repository.create_lead(session, lead)
+		
+		# Emit event
+		await events.emit_lead_created(tenant_id, lead.id, actor_id)
+		
+		return lead
 
 	async def get_lead(
 		self, session: AsyncSession, tenant_id: UUID, lead_id: UUID
@@ -140,9 +161,12 @@ class CrmService:
 		tenant_id: UUID,
 		lead_id: UUID,
 		data: LeadUpdateRequest,
+		actor_id: UUID | None = None,
 	) -> Lead:
 		"""Update a lead with state transition validation."""
 		lead = await self.get_lead(session, tenant_id, lead_id)
+		
+		old_status = lead.status
 		
 		# Validate status transition if status is being changed
 		if data.status is not None and data.status != lead.status:
@@ -151,7 +175,14 @@ class CrmService:
 		# Apply updates
 		for key, value in data.model_dump(exclude_unset=True).items():
 			setattr(lead, key, value)
-		return await repository.update_lead(session, lead)
+		
+		lead = await repository.update_lead(session, lead)
+		
+		# Emit event if status changed
+		if data.status is not None and data.status != old_status:
+			await events.emit_lead_status_changed(tenant_id, lead.id, old_status.value, data.status.value, actor_id)
+		
+		return lead
 
 	async def delete_lead(self, session: AsyncSession, tenant_id: UUID, lead_id: UUID) -> None:
 		"""Soft-delete a lead."""
@@ -169,7 +200,7 @@ class CrmService:
 			)
 
 	async def convert_lead(
-		self, session: AsyncSession, tenant_id: UUID, lead_id: UUID
+		self, session: AsyncSession, tenant_id: UUID, lead_id: UUID, actor_id: UUID | None = None
 	) -> Client:
 		"""Convert a lead to a client.
 		
@@ -202,6 +233,10 @@ class CrmService:
 		# Update lead status to converted
 		lead.status = LeadStatus.converted
 		await repository.update_lead(session, lead)
+		
+		# Emit events
+		await events.emit_client_converted(tenant_id, client.id, lead.id, actor_id)
+		await events.emit_lead_status_changed(tenant_id, lead.id, LeadStatus.qualified.value, LeadStatus.converted.value, actor_id)
 		
 		return client
 
